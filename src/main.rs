@@ -39,6 +39,8 @@ macro_rules! my_macro {
 }
 use core::*;
 use std::{ops::Neg, process::Output};
+
+use ::num::integer::lcm;
 //use std::{fs::canonicalize, default::default};
 //use ndarray;
 #[derive(Debug,Ord!,Copy!)]
@@ -75,6 +77,14 @@ impl<T: ::num::Integer + Clone> DashNumber<::num::rational::Ratio<T>> {
         use DashNumber::*;
         match self {
             DashNumber::Number(a) => DashNumber::Number(a.to_integer()),
+            Infinity => Infinity,
+            NegInfinity => NegInfinity,
+        }
+    }
+    fn ceil(self) -> DashNumber<T> {
+        use DashNumber::*;
+        match self {
+            DashNumber::Number(a) => DashNumber::Number(a.ceil().to_integer()),
             Infinity => Infinity,
             NegInfinity => NegInfinity,
         }
@@ -387,8 +397,7 @@ impl<N: ops::Add<Output = N> + Copy> ops::Add<N> for DashNumber<N> {
     }
 }
 
-impl<N: ::num::Integer>  DashNumber<N> {
-
+impl<N: ::num::Integer> DashNumber<N> {
     fn from_str_radix(str: &str, radix: u32) -> Result<Self, N::FromStrRadixErr> {
         use DashNumber::*;
         match str {
@@ -397,7 +406,7 @@ impl<N: ::num::Integer>  DashNumber<N> {
             _ => N::from_str_radix(str, radix).map(Number),
         }
     }
-fn gcd(&self, other: &Self) -> Self {
+    fn gcd(&self, other: &Self) -> Self {
         use DashNumber::*;
         match (self, other) {
             (NegInfinity, _) | (Infinity, _) => Number(N::zero()),
@@ -405,7 +414,6 @@ fn gcd(&self, other: &Self) -> Self {
             (Number(a), Number(b)) => Number(a.gcd(&b)),
         }
     }
-
 }
 
 /*impl<N: ops::Add<Output = N> + Copy> ops::AddAssign<N> for DashNumber<N> {
@@ -1063,8 +1071,14 @@ struct series<T: Clone> {
 impl<T: ops::Neg<Output = T> + Copy + Default + ::num::Integer> series<T>
 where
     usize: TryFrom<DashNumber<T>, Error = TryFromDashNumberError>,
-    T: From<u8> + From<usize> + fmt::Debug, // <usize as TryFrom<T>>::Error: fmt::Debug,
-                                            //  <usize as TryFrom<DashNumber<T>>>::Error: TryFromDashNumberError
+    T: From<u8>
+        + From<usize>
+        + fmt::Debug
+        + // <usize as TryFrom<T>>::Error: fmt::Debug,
+        ops::Mul<Output = T>
+        + Copy
+        + ::num::Zero
+        + PartialOrd, //  <usize as TryFrom<DashNumber<T>>>::Error: TryFromDashNumberError
 {
     fn otimes(&self, s2: &Self) -> Self {
         use DashNumber::*;
@@ -1105,6 +1119,63 @@ where
         };
         temp1.canon();
         result = result.oplus(&temp1);
+        let ads1: &Self;
+        let ads2: &Self;
+
+        //***** Processing q1, q2, r1*, r2* *****//
+        temp1.canonise = false;
+        temp1.q = self.q.otimes(&s2.q); // q1 * q2
+                                        //********* r1 * r2 * *******************//
+                                        /**** Degenerated cases *******/
+        if <DashNumber<T> as ::num::Zero>::is_zero(&self.r.d)
+            && <DashNumber<T> as ::num::Zero>::is_zero(&s2.r.d)
+        {
+            result = result.oplus(&temp1);
+            return result;
+        }
+
+        if (<DashNumber<T> as ::num::Zero>::is_zero(&self.r.g) && self.r.d == Infinity)
+            || (<DashNumber<T> as ::num::Zero>::is_zero(&s2.r.g) && s2.r.d == Infinity)
+        {
+            temp1.p = Poly::from(gd::from((Infinity, NegInfinity)));
+            temp1.r = (T::zero().into(), Infinity).into();
+            result = result.oplus(&temp1);
+            return result;
+        }
+
+        let (ads1, ads2) = if <DashNumber<T> as ::num::Zero>::is_zero(&self.r.d)
+            && <DashNumber<T> as ::num::Zero>::is_zero(&self.r.g)
+            && !<DashNumber<T> as ::num::Zero>::is_zero(&s2.r.g)
+            && !<DashNumber<T> as ::num::Zero>::is_zero(&s2.r.d)
+            && s2.r.d != Infinity
+        {
+            // Symmetrical treatment after inversion
+            (&s2, &self)
+        } else {
+            (&self, &s2)
+        };
+        if <DashNumber<T> as ::num::Zero>::is_zero(&ads2.r.d)
+            && <DashNumber<T> as ::num::Zero>::is_zero(&ads2.r.g)
+            && !<DashNumber<T> as ::num::Zero>::is_zero(&ads1.r.g)
+            && !<DashNumber<T> as ::num::Zero>::is_zero(&ads1.r.d)
+            && ads1.r.d != Infinity
+        {
+            temp1.r = ads1.r;
+            temp1.p = Poly::from(gd::from((Infinity, NegInfinity)));
+            temp1.canon();
+            result = result.oplus(&temp1);
+
+            return result;
+        }
+        //the non-degenerate case
+
+        let s1g = get_number!(self.r.g);
+        let s1d = get_number!(self.r.d);
+        let s2g = get_number!(s2.r.g);
+        let s2d = get_number!(s2.r.d);
+        let pente1 = ::num::rational::Ratio::new_raw(s1g, s1d);
+        let pente2 = ::num::rational::Ratio::new_raw(s2g, s2d);
+
         todo!();
     }
     fn oplus(&self, s2: &Self) -> Self {
@@ -1241,8 +1312,90 @@ where
             result.canonise = true;
             return result;
         }
+        //the non degenerate case
+        //(this means there shouldn't be infinities so it should be safe to extract numbers)
+        //
+        let s1g = get_number!(self.r.g);
+        let s1d = get_number!(self.r.d);
+        let s2g = get_number!(s2.r.g);
+        let s2d = get_number!(s2.r.d);
+        let pente1 = ::num::rational::Ratio::new_raw(s1g, s1d);
+        let pente2 = ::num::rational::Ratio::new_raw(s2g, s2d);
+        if pente1 == pente2 {
+            let p = self.p.oplus(&s2.p);
+            let g = lcm(s1g, s2g);
+            let r: gd<DashNumber<T>> = (g, lcm(s1d, s2d)).into();
+            let k1 = g / s1g;
+            let k2 = g / s2g;
+            let mut q = self.q.clone();
+            //error[E0277]: cannot multiply `DashNumber<T>` by `{integer}`
+            for i in 1..DashNumber::Number(k1).try_into().unwrap() {
+                for j in 0..self.q.data.len() {
+                    let mut monome: gd<DashNumber<T>> =
+                        (self.r.g * T::from(i), self.r.d * T::from(i)).into();
+                    monome = monome.otimes(&self.q.data[j]);
+                    q.data.push(monome);
+                }
+            }
 
-        todo!();
+            for i in 0..DashNumber::Number(k2).try_into().unwrap() {
+                for j in 0..s2.q.data.len() {
+                    let monome: gd<DashNumber<T>> = (
+                        s2.q.data[j].g + s2.r.g * T::from(i),
+                        s2.q.data[j].d + s2.r.d * T::from(i),
+                    )
+                        .into();
+                    q.data.push(monome);
+                }
+            }
+            result.p = p;
+            result.q = q;
+            result.r = r;
+            result.canonise = false;
+            result.canon();
+        } else {
+            // series of different slopes
+            // The slope of r2 must be lower than that of r1
+            // if this is not the case, we swap the 2 series
+            //
+            let (ads1, ads2) = if pente1 > pente2 {
+                (&s2, &self)
+            } else {
+                (&self, &s2)
+            };
+
+            // domination lemma
+            let t2 = ads2.q.data[ads2.q.data.len() - 1].d;
+            let k1 = ads1.r.g * (t2 - ads1.q.data[0].d + ads1.r.d)
+                + ads1.r.d * (ads1.q.data[0].g - ads2.q.data[0].g);
+            let k2 = ads1.r.d * ads2.r.g - ads1.r.g * ads2.r.d;
+            let k = cmp::max(
+                cmp::max(T::zero(), get_number!((k1 / k2).ceil())),
+                get_number!(((ads1.q.data[0].g - ads2.q.data[0].g) / ads2.r.g).ceil()),
+            );
+            // initialize p = p1 + p2
+
+            let mut p = ads1.p.oplus(&ads2.p);
+            for i in 0..DashNumber::Number(k).try_into().unwrap() {
+                for j in 0..ads2.q.data.len() {
+                    let monome: gd<DashNumber<T>> = (
+                        ads2.q.data[j].g + ads2.r.g * T::from(i),
+                        ads2.q.data[j].d + ads2.r.d * T::from(i),
+                    )
+                        .into();
+                    p.data.push(monome);
+                }
+            }
+            // Calculate the polynomial q and the monome r
+            //let q = ads1.q;
+            //let r = ads1.r;
+            result.q = ads1.q.clone();
+            result.r = ads1.r.clone();
+            result.p = p;
+            result.canonise = false;
+            result.canon();
+        }
+        return result;
     }
     fn canon(&mut self) {
         use DashNumber::*;
@@ -1645,4 +1798,4 @@ mod tests {
     }
 }
 //:execute "$|y" | execute strpart(@",2)
-//exe "ExecutorShowDetail"|sleep 1|exe "wincmd w"|set nonumber|exe "wincmd p"|exe "vertical resize 160"|exe "ExecutorSetCommand"|call feedkeys("cargo run\r")|autocmd BufWritePre *.rs :ExecutorRun
+//try|exe "ExecutorShowDetail"|catch|echo "Executor show detail errored"|endtry|sleep 1|exe "wincmd w"|set nonumber|exe "wincmd p"|exe "vertical resize 160"|exe "ExecutorSetCommand"|call feedkeys("cargo run\r")|autocmd BufWritePre *.rs :ExecutorRun
