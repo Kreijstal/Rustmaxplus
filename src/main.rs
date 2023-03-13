@@ -10,6 +10,7 @@ macro_rules_attribute = "*"
 #![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
+#![feature(const_try)]
 //#![no_std]
 
 #[macro_use]
@@ -38,15 +39,13 @@ macro_rules! my_macro {
     };
 }
 use core::*;
-use std::{
-    collections::{self, HashSet},
-    ops::Neg,
-    process::Output,
-};
-
-use ::num::integer::{gcd, lcm};
-use itertools::Itertools;
-//use std::{fs::canonicalize, default::default};
+use std::vec;
+//use ::num::integer::{gcd, lcm};
+//use itertools::Itertools;
+//use std::{fs::canonicalize, default::default
+// collections::{self, HashSet},
+//   ops::Neg,
+// process::Output,};
 //use ndarray;
 #[derive(Debug,Ord!,Copy!)]
 enum DashNumber<N> {
@@ -470,7 +469,7 @@ impl<N: ops::Add<Output = N> + ops::Neg<Output = N> + Copy> ops::Sub<DashNumber<
     }
 }
 
-#[derive(Debug,Eq!,Ord,Copy!)]
+#[derive(Debug,Eq!,Copy!)]
 struct gd<T> {
     g: T,
     d: T,
@@ -480,6 +479,24 @@ impl<T: Clone + fmt::Display> fmt::Display for gd<T> {
         write!(f, "g{}.d{}", self.g, self.d)
     }
 }
+const _: () = {
+    use nom::character::complete::{char, digit1};
+use nom::combinator::map_res;
+use nom::IResult;
+
+fn parse_gd<T>(input: &str) -> IResult<&str, gd<T>>
+where
+    T: std::str::FromStr,
+    <T as std::str::FromStr>::Err: std::fmt::Debug,
+{
+    let (input, _) = char('g')(input)?;
+    let (input, g) = map_res(digit1, |s: &str| s.parse::<T>())(input)?;
+    let (input, _) = char('.')(input)?;
+    let (input, _) = char('d')(input)?;
+    let (input, d) = map_res(digit1, |s: &str| s.parse::<T>())(input)?;
+    Ok((input, gd { g, d }))
+}
+};
 impl<T> PartialOrd for gd<T>
 where
     T: PartialOrd,
@@ -487,13 +504,30 @@ where
     fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
         //Some(self.cmp(other))
         if self.g == other.g {
-            other.d.partial_cmp(&self.d)
+            self.d.partial_cmp(&other.d)
         } else {
-            self.g.partial_cmp(&other.g)
+            other.g.partial_cmp(&self.g)
         }
     }
 }
-
+impl<T> Ord for gd<T>
+where
+    T: Ord,
+{
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        if self.g > other.g {
+            cmp::Ordering::Less
+        } else if self.g < other.g {
+            cmp::Ordering::Greater
+        } else if self.d < other.d {
+            cmp::Ordering::Less
+        } else if self.d > other.d {
+            cmp::Ordering::Greater
+        } else {
+            cmp::Ordering::Equal
+        }
+    }
+}
 impl<T: Clone> From<(T, T)> for gd<DashNumber<T>> {
     fn from(item: (T, T)) -> Self {
         gd {
@@ -546,6 +580,30 @@ impl<T: Clone + Default> gd<DashNumber<T>> {
     fn zero() -> Self {
         (T::default(), T::default()).into()
     }
+}
+
+trait usefulNum:
+    TryFrom<u8>
+    + TryFrom<usize>
+    + fmt::Debug
+    + Clone
+    + ::num::Integer
+    + Default
+    + ops::Neg
+    + ops::AddAssign
+{
+}
+impl<
+        T: TryFrom<u8>
+            + TryFrom<usize>
+            + fmt::Debug
+            + Clone
+            + ::num::Integer
+            + Default
+            + ops::Neg
+            + ops::AddAssign,
+    > usefulNum for T
+{
 }
 trait starable {
     type Output;
@@ -631,6 +689,15 @@ impl<T: Copy + ops::Neg<Output = T> + ops::Add<Output = T>> gd<DashNumber<T>> {
     }
 }
 
+/*impl<N: ::num::Zero + Copy> ::num::Zero for series<N> {
+    fn zero() -> Self {
+        Self::from(Poly::from(gd::zero()))
+    }
+    fn is_zero(&self) -> bool {
+        self == Self::zero()
+    }
+}*/
+
 #[derive(Debug, Clone, PartialEq)]
 struct Poly<T: Clone> {
     epsNTop: epsortop,
@@ -658,7 +725,11 @@ impl<T: Clone> Poly<gd<DashNumber<T>>> {
 
 impl<T: Clone> Default for Poly<gd<DashNumber<T>>> {
     fn default() -> Self {
-        Self::new(vec![])
+        use DashNumber::*;
+        let mut ans = Self::new(vec![gd::from((Infinity, NegInfinity))]);
+        ans.epsNTop = epsortop::eps;
+        ans.simple = true;
+        ans
     }
 }
 
@@ -698,11 +769,18 @@ impl<T: Copy + PartialEq + Default> From<Vec<gd<DashNumber<T>>>> for Poly<gd<Das
     fn from(item: Vec<gd<DashNumber<T>>>) -> Self {
         //let a = item.is_epsilon_or_top();
         use epsortop::*;
+        //let mut p
         Poly {
             epsNTop: NoXtreme,
             data: item,
             simple: false,
         }
+    }
+}
+impl<T: Clone +Copy+ PartialEq + Default> From<Vec<(T,T)>> for Poly<gd<DashNumber<T>>> {
+    fn from(item: Vec<(T,T)>) -> Self {
+        let vec: Vec<gd<DashNumber<T>>> = item.into_iter().map(|x| gd::from(x)).collect();
+        vec.into()
     }
 }
 impl<T: Copy + Ord + Default + ops::Add<Output = T>> Poly<gd<DashNumber<T>>> {
@@ -727,12 +805,16 @@ impl<T: Copy + Ord + Default> Poly<gd<DashNumber<T>>> {
             "prcaus shouldn't be called on unsimplified form"
         );
         let mut local = Self::default();
-        local.data = self
-            .data
-            .clone()
-            .into_iter()
-            .filter(|&g| g.g >= T::default() && g.d >= T::default())
-            .collect();
+        local.data = {
+            let pos: Option<usize> = self
+                .data
+                .iter()
+                .rposition(|&g| !(g.g >= T::default() && g.d >= T::default()));
+            match pos {
+                Some(p) => self.data[(p + 1)..].to_vec(),
+                None => self.data.clone(),
+            }
+        };
         // If local.data.len()==self.data.len(), all the monomials of p were causal
         // Otherwise, there may be the causal part of the self.data.len()-i-1th to add
         if local.data.len() < self.data.len() {
@@ -742,7 +824,7 @@ impl<T: Copy + Ord + Default> Poly<gd<DashNumber<T>>> {
             //guaranteed to work
         }
         local.simple = false;
-        println!("self.length is {:?}", self.data.len());
+        //println!("self.length is {:?}", self.data.len());
         assert!(
             local.data.len() != 0,
             "don't call simplify if local is empty"
@@ -755,7 +837,7 @@ impl<T: Copy + Ord + Default> Poly<gd<DashNumber<T>>> {
         if self.simple {
             return;
         };
-        self.data.sort_unstable();
+        self.data.sort_unstable_by(|a, b| b.cmp(a));
         self.onlysimply();
     }
     fn Top() -> Self {
@@ -776,10 +858,10 @@ impl<T: Copy + Ord + Default> Poly<gd<DashNumber<T>>> {
                 */
             // self.data.drain(j..(j + 1));
             self.data.remove(j);
-            self.simple=false;
+            self.simple = false;
             if self.data.len() < 1 {
-                self.epsNTop=epsortop::eps;
-                self.simple=true;
+                self.epsNTop = epsortop::eps;
+                self.simple = true;
                 self.data = vec![gd {
                     g: DashNumber::Infinity,
                     d: DashNumber::NegInfinity,
@@ -867,6 +949,7 @@ impl<T: Copy + Ord + Default> Poly<gd<DashNumber<T>>> {
             self.data.drain(n..);
         }
         self.simple = true;
+        self.epsNTop = epsortop::NoXtreme;
         if self.data.len() == 1 && self.data[0] == gd::epsilon() {
             self.epsNTop = epsortop::eps;
         }
@@ -979,7 +1062,7 @@ where
         }
         let qtemp = self.prcaus();
         if !self.eq(&qtemp) {
-            println!("HI!{:?}={:?}", self, self.prcaus());
+            //println!("HI!{:?}={:?}", self, self.prcaus());
             return Err("Star of non causal Polynomial is prohibited".to_string());
         }
 
@@ -1000,23 +1083,30 @@ where
                 canonise: true,
             });
         }
-        let poly1 = self.data.clone();
-        for i in 0..self.data.len() {
+        let mut poly1 = self.clone();
+        let mut i: usize = 0;
+        while i < poly1.data.len() {
+            //for i in 0..poly1.data.len() {
             // We remove the elements whose star value is e. But a simplified polynom contains no
             // gamma infinities unless it's eps
-            if self.data[i].g == Infinity || self.data[i].d == DashNumber::default() {
-                // the result is the series is: epsilon+ e .(e)*
-                // because there is only one element that is null in the polynomial
-                return Ok(series::<T> {
-                    r: gd::zero(),
-                    p: Poly::Epsilon(),
-                    q: gd::zero().into(),
-                    canonise: true,
-                });
-                // we return (epsilon+ e .(e)*
+            if poly1.data[i].g == Infinity || poly1.data[i].d == DashNumber::default() {
+                if poly1.data.len() > 1 {
+                    poly1.popj(i);
+                } else {
+                    // the result is the series is: epsilon+ e .(e)*
+                    // because there is only one element that is null in the polynomial
+                    return Ok(series::<T> {
+                        r: gd::zero(),
+                        p: Poly::Epsilon(),
+                        q: gd::zero().into(),
+                        canonise: true,
+                    });
+
+                    // we return (epsilon+ e .(e)*
+                }
             }
             // we check if the star of one of the elements is equal to (delta)*
-            if self.data[i].g == DashNumber::default() && self.data[i].d > DashNumber::default() {
+            if poly1.data[i].g == DashNumber::default() && poly1.data[i].d > DashNumber::default() {
                 return Ok(series::<T> {
                     r: ((DashNumber::default(), Infinity).into()),
                     p: Poly::from(gd::from((DashNumber::default(), Infinity))),
@@ -1024,24 +1114,26 @@ where
                     canonise: true,
                 });
             }
-            if self.data[i].d == Infinity {
+            if poly1.data[i].d == Infinity {
                 // we save the nui associated with a taui=Infinity
-                if self.data[i].g < numax {
-                    numax = self.data[i].g;
+                if poly1.data[i].g < numax {
+                    numax = poly1.data[i].g;
                 }
             }
+            i += 1;
         }
         //self.data[0].g.some_mul(T::one());
         //We handle cases where at least one of the taui is infinite
         if numax != Infinity {
             let mut p: Self = Poly::from(gd::zero());
-            for i in 0..self.data.len() {
+            for i in 0..poly1.data.len() {
                 //For each element, we continue until numax if necessary.
                 let mut j = T::one();
-                while self.data[i].g * j < numax {
+                while poly1.data[i].g * j < numax {
                     // let monom:gd=(self.data[i].g*j,self.data[i].d*j).into();
                     // monome.init(j*self.data[i].g,j*self.data[i].d);
-                    p.data.push((self.data[i].g * j, self.data[i].d * j).into());
+                    p.data
+                        .push((poly1.data[i].g * j, poly1.data[i].d * j).into());
                     j += T::one();
                 }
             }
@@ -1057,9 +1149,9 @@ where
         // The Non  degenereated case
 
         // Below is a trick to avoid computing the star of a polynomial that is already a star (08/04/2019 Angers)
-        if self.data[0] == gd::zero() {
+        if poly1.data[0] == gd::zero() {
             let qtemp = self.otimes(self);
-            if &qtemp == self {
+            if &qtemp == &poly1 {
                 // It is already a star, it is enough
                 return Ok(qtemp.into());
             }
@@ -1067,23 +1159,23 @@ where
         // End of the added trick (08/04/2019 Angers)
 
         // Search for the smallest slope with the smallest nu
-        let (nj, pente) = self
+        let (nj, pente) = poly1
             .data
             .iter()
             .enumerate()
             .min_by_key(|(_, &item)| item.g / item.d)
-            .unwrap();
+            .expect("Well, a minimum must exist doesn't it?");
 
         // New algorithm: we deal with all monomials with the slope equal to the smallest slope (30/12/2018), which means the slower production rate
         let mut stemp = series::default();
-        let mut result = self.data[nj].star()?;
+        let mut result = poly1.data[nj].star()?; //Works up to here at least
         let mut ignore = vec![];
-        for i in (nj + 1)..self.data.len() {
+        for i in (nj + 1)..poly1.data.len() {
             //let pente1 = self.data[i].g as f64 / self.data[i].d as f64;
-            if self.data[i].g * pente.d == pente.g * self.data[i].d {
+            if poly1.data[i].g * pente.d == pente.g * poly1.data[i].d {
                 stemp.p = Poly::Epsilon();
                 stemp.q = gd::zero().into();
-                stemp.r = self.data[i].clone();
+                stemp.r = poly1.data[i].clone();
                 result = result.otimes(&stemp);
                 ignore.push(i);
                 // self.popj(i); // Remove the element from the polynomial, it has been processed
@@ -1095,12 +1187,14 @@ where
         }
 
         // Process all stars whose slope is lower than the retained slope above
-        for i in 0..self.data.len() {
+        for i in 0..poly1.data.len() {
             if !ignore.contains(&i) {
                 stemp.p = Poly::Epsilon();
                 stemp.q = gd::zero().into();
-                stemp.r = self.data[i].clone();
-                result = result.otimes(&stemp);
+                stemp.r = poly1.data[i].clone();
+                stemp.canonise = false;
+                stemp.canon();
+                result = stemp.otimes(&result);
             }
             //    stemp.init(epsilon, e, self.data[i]);
             //     result = otimes(stemp, result);
@@ -1125,6 +1219,19 @@ struct series<T: Clone> {
     r: gd<DashNumber<T>>,
     canonise: bool,
 }
+impl<T: usefulNum+Copy+ops::Neg<Output=T>> From<(Vec<(T, T)>, Vec<(T, T)>, (T, T))> for series<T> where
+usize: TryFrom<T> + TryFrom<DashNumber<T>, Error = TryFromDashNumberError>
+{
+    fn from(item: (Vec<(T, T)>, Vec<(T, T)>, (T, T))) -> Self {
+        let p: Poly<gd<DashNumber<T>>> = item.0.into();
+        let q: Poly<gd<DashNumber<T>>> = item.1.into();
+        let r: gd<DashNumber<T>> = gd::from(item.2);
+        let mut s=series { p, q, r,canonise:false };
+        s.canon();
+        s
+    }
+}
+
 
 impl<T: Copy + fmt::Display + cmp::PartialEq + Default> fmt::Display for series<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1172,6 +1279,9 @@ where
                     .to_string(),
             );
         }
+        if self.isEpsilon() {
+            return Ok(Self::from(Poly::from(gd::zero())));
+        }
         let s1 = self.clone();
         // Below a trick added to avoid the computation of (s1)* if s1 is already a star Angers 08/04/2019
         let mut temp = s1.otimes(&s1);
@@ -1185,19 +1295,20 @@ where
         result.q = s1.q.oplus(&Poly::from(self.r)); //(q+r)
                                                     //cout<<" before (q+r)*"<<endl;
         result.q.simplify();
+
         let mut result = result.q.star()?; //.expect("result.q couldn't be used to create star");    // (q+r)*
 
         //cout<<" after (q+r)*"<<endl;
 
-        println!("{:?}", s1.clone());
+        //println!("{:?}", s1.clone());
         result = result
             .otimes(&series::from(s1.q))
             .oplus(&series::from(Poly::from(monome))); // e + q .(q+r)*
                                                        //cout<<" after (e+q(q+r)*"<<endl;
-        //println!("HUH!?2");
+                                                       //println!("HUH!?2");
         temp = s1.p.star()?; // p*
-        //println!("HUH!?3");
-        //cout<<" after p*"<<endl;
+                             //println!("HUH!?3");
+                             //cout<<" after p*"<<endl;
 
         result = temp.otimes(&result);
         //cout<<" after p*(e+q(q+r)*"<<endl;
@@ -1256,13 +1367,13 @@ where
         result.canonise = false;
         result.p = self.p.otimes(&s2.p); // p1 p2
 
-        result.q = self.p.otimes(&s2.p); // p1 q2
-        result.r = s2.r;
+        result.q = self.p.otimes(&s2.q); // p1 q2
+        result.r = s2.r; // r2
         result.canon();
         let mut temp1 = series {
-            q: s2.p.otimes(&self.q),
+            q: s2.p.otimes(&self.q), // p2 q1
             p: Poly::<_>::from(gd::epsilon()),
-            r: self.r,
+            r: self.r, // r1
             canonise: false,
         };
         //let mut whatthefuck=temp1.clone();
@@ -1270,9 +1381,9 @@ where
         /*if !temp1.p.simple {
             whatthefuck.canon();
         }*/
-        assert!(temp1.p.simple,"temp1 must be simple");
+        assert!(temp1.p.simple, "temp1 must be simple");
         result = result.oplus(&temp1);
-    
+
         let ads1: &Self;
         let ads2: &Self;
 
@@ -1330,7 +1441,7 @@ where
             return result;
         }
         //the non-degenerate case
-        println!("THIS HAS BEEN RUN");
+        //println!("THIS HAS BEEN RUN");
 
         let s1g = get_number!(self.r.g);
         let s1d = get_number!(self.r.d);
@@ -1340,12 +1451,13 @@ where
         let pente2 = ::num::rational::Ratio::new_raw(s2g, s2d);
         let mut p1: Poly<gd<DashNumber<T>>> = Poly::default();
         if pente1 == pente2 {
-            let k1 = gcd(s1g, s2g);
-            let k2 = gcd(s1d, s2d);
-            result.r = (k1, k2).into();
+            // pente identique
+            let k1 = ::num::integer::gcd(s1g, s2g);
+            let k2 = ::num::integer::gcd(s1d, s2d);
+            temp1.r = (k1, k2).into();
             let tau = ::num::rational::Ratio::new_raw(k1, k2);
             let k1 = ::num::rational::Ratio::new_raw((s1g - k1) * (s2g - k1), k1).to_integer();
-            let k2 = ::num::rational::Ratio::new_raw((s1g - k2) * (s2g - k2), k2).to_integer();
+            let k2 = ::num::rational::Ratio::new_raw((s1d - k2) * (s2d - k2), k2).to_integer();
             let mut i = T::zero();
             let mut j = T::zero();
             let mut teta = T::zero();
@@ -1412,7 +1524,7 @@ where
             temp1.canon();
         }
         result = result.oplus(&temp1);
-        result.canonise=false;
+        result.canonise = false;
         result.canon();
         result
     }
@@ -1573,8 +1685,8 @@ where
         let pente2 = ::num::rational::Ratio::new_raw(s2g, s2d);
         if pente1 == pente2 {
             let p = self.p.oplus(&s2.p);
-            let g = lcm(s1g, s2g);
-            let r: gd<DashNumber<T>> = (g, lcm(s1d, s2d)).into();
+            let g = ::num::integer::lcm(s1g, s2g);
+            let r: gd<DashNumber<T>> = (g, ::num::integer::lcm(s1d, s2d)).into();
             let k1 = g / s1g;
             let k2 = g / s2g;
             let mut q = self.q.clone();
@@ -1732,17 +1844,30 @@ where
         // Putting the periodic in proper form
         // that is, the pattern fits within the periodic
         //We remove the roots of the polynomial q that would be dominated by others after development
+        let mut filter = vec![];
         for j in (1..self.q.data.len()).rev() {
             for i in 0..j {
                 let k: DashNumber<T> = ((self.q.data[j].g - self.q.data[i].g) / self.r.g).round(); // round down
                 if k >= <DashNumber<T> as ::num::One>::one()
                     && (self.q.data[i].d + k * self.r.d) >= self.q.data[j].d
                 {
-                    self.q.popj(j);
+                    filter.push(j);
+                    //self.q.popj(j);
                     break;
                 }
             }
         }
+        self.q.data = self
+            .q
+            .data
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter(|(a, b)| !filter.contains(a))
+            .map(|(_, e)| e)
+            .collect();
+        self.q.simple = false;
+        self.q.simplify();
         let j = self.q.data.len() - 1; // index of last element
         let nb_g = self.q.data[j].g - self.q.data[0].g; // number of gammas in the periodic pattern -1
 
@@ -1870,6 +1995,8 @@ where
             let mut j = 0;
             loop {
                 // Test if the last element of the transitory is dominated by an element of the periodic
+                //Problematic
+                //FIXME: <= operator unknown in etvo..
                 if self.p.data[i] <= self.q.data[j] && self.p.data[i] != epsilon {
                     // If so, remove it
                     self.p.pop();
@@ -1898,6 +2025,7 @@ where
                 }
                 self.q = self.q.otimes(&self.r.into());
             }
+            self.p.simplify();
             self.p = temp.oplus(&self.p);
         }
         // Shift the periodic as much as possible onto the transitory
@@ -1913,35 +2041,78 @@ where
         }
         // The series should now be in canonical form
         self.canonise = true;
-        self.q.simple=false;
+        self.q.simple = false;
         self.q.simplify();
-        self.p.simple=false;
+        self.p.simple = false;
         self.p.simplify()
     }
 }
 #[derive(Debug, Clone)]
 struct Matrix<O, I, T>(std::collections::HashMap<(O, I), T>);
 
+impl<O, I, T> cmp::PartialEq for Matrix<O, I, T>
+where
+    T: cmp::PartialEq,
+    O: std::cmp::Eq+hash::Hash+Clone,
+    I:std::cmp::Eq+hash::Hash+Clone
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.0.len() != other.0.len() {
+            return false;
+        }
+        for ((self_o, self_i), self_t) in &self.0 {
+            if let Some(other_t) = other.0.get(&(self_o.clone(), self_i.clone())) {
+                if self_t != other_t {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+
+
 #[cfg(not(debug_assertions))]
-impl<A,B,T> fmt::Display for Matrix<A,B,T> where
-T: fmt::Display+fmt::Debug,
-A: fmt::Display,
-B: fmt::Display{
+impl<A, B, T> fmt::Display for Matrix<A, B, T>
+where
+    T: fmt::Display + fmt::Debug,
+    A: fmt::Display,
+    B: fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-/*    self.data
-                    .iter()
-                    .map(|x| x.to_string())
-                    .collect::<Vec<_>>()
-                    .join("+")
-*/
-       write!(f,"{}",self.0.iter().map(|((x,y),v)| format!("[{},{}]={}",x,y,v)).collect::<Vec<_>>().join("\n"))
+        /*    self.data
+                            .iter()
+                            .map(|x| x.to_string())
+                            .collect::<Vec<_>>()
+                            .join("+")
+        */
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|((x, y), v)| format!("[{},{}]={}", x, y, v))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 }
 
 #[cfg(debug_assertions)]
-impl fmt::Display for Matrix<i32,i32,series<i32>>{
+impl fmt::Display for Matrix<i32, i32, series<i32>> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-       write!(f,"{}",self.0.iter().map(|((x,y),v)| format!("[{},{}]={}",x,y,v)).collect::<Vec<_>>().join("\n"))
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(|((x, y), v)| format!("[{},{}]={}", x, y, v))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 }
 fn inner<O, Intermediate, I, T>(
@@ -1971,7 +2142,7 @@ where
                     .entry((i1.clone(), j2.clone()))
                     .or_insert(zero.clone());
                 *out_value = g(v, out_value.clone());
-               // println!("{?:}",out_value);
+                // println!("{?:}",out_value);
             }
         }
     }
@@ -1994,7 +2165,7 @@ where
     }
     fn transpose(&self) -> Matrix<I, O, T> {
         let mut new_map = std::collections::HashMap::new();
-////
+        ////
         for ((o, i), v) in &self.0 {
             new_map.insert((i.clone(), o.clone()), v.clone());
         }
@@ -2039,10 +2210,8 @@ where
     T: TryFrom<u8>
         + TryFrom<usize>
         + fmt::Debug
-        + ops::Mul<Output = T>
         + Copy
         + ::num::Integer
-        + Ord
         + Default
         + ops::Neg<Output = T>
         + ops::AddAssign<T>,
@@ -2076,10 +2245,8 @@ where
     T: TryFrom<u8>
         + TryFrom<usize>
         + fmt::Debug
-        + ops::Mul<Output = T>
         + Copy
         + ::num::Integer
-        + Ord
         + Default
         + ops::Neg<Output = T>
         + ops::AddAssign<T>,
@@ -2099,38 +2266,40 @@ where
     }
 }
 
-#[cfg(not(debug_assertions))]
+//#[cfg(not(debug_assertions))]
 impl<V, T> starable for Matrix<V, V, series<T>>
 where
     V: Eq + Clone + hash::Hash + fmt::Debug,
     series<T>: starable<Output = series<T>> + Clone,
+    //+fmt::Display,
+    //TEMPORARY
+    //std::collections::hash_set::IntoIter<&V>: Clone,
     usize: TryFrom<DashNumber<T>, Error = TryFromDashNumberError> + TryFrom<T>,
     T: TryFrom<u8>
         + TryFrom<usize>
         + fmt::Debug
-        + ops::Mul<Output = T>
+        // + fmt::Display//TEMPORARY
         + Copy
         + ::num::Integer
-        + Ord
         + Default
         + ops::Neg<Output = T>
         + ops::AddAssign<T>,
 {
     type Output = Self;
     fn star(&self) -> Result<Self, String> {
-        let mut m = std::collections::HashMap::new();
+        let mut id = std::collections::HashMap::new();
         let default = series::from(Poly::from(gd::zero())); // do this once. btw what's up with the casing on these names?
         for ((x, y), v) in &self.0 {
             if x == y {
                 // on the diagonal: use v
                 let xy = (x.clone(), y.clone());
-                m.insert(xy, v.star()?);
+                id.insert(xy, default.clone());
             } else {
                 // off the diagonal: "project" onto the diagonal and populate with a default value
                 let xx = (x.clone(), x.clone());
-                m.entry(xx).or_insert_with(|| default.clone());
+                id.insert(xx, default.clone());
                 let yy = (y.clone(), y.clone());
-                m.entry(yy).or_insert_with(|| default.clone());
+                id.insert(yy, default.clone());
             }
         }
         let k: std::collections::HashSet<&V> =
@@ -2138,27 +2307,88 @@ where
         //let scanon=self.map(|s| {let mut a=s.clone();a.canon();a});
         let mut multi: Matrix<V, V, series<T>> = self.clone();
         //println!("IT BEGINS!");
-        let mut o: Matrix<V, V, series<T>> = &Matrix(m) + &multi;
+        // let mut o: Matrix<V, V, series<T>> = &Matrix(m) + &multi;
+        let eps: series<T> = series::from(Poly::Epsilon());
+        let k: Vec<&V> = k.clone().into_iter().collect();
+        for key in k.clone().into_iter() {
+            let mut newM = std::collections::HashMap::new();
+            let akkstar = multi
+                .0
+                .get(&(key.clone(), key.clone()))
+                .unwrap_or(&eps)
+                .star()?;
 
-        for key in k.iter() {
-            //for ((x, y), v) in &multi.0 {
+            use itertools::iproduct;
+            for (i, j) in iproduct!(k.clone(), k.clone()) {
+                let aij = multi.0.get(&(i.clone(), j.clone())).unwrap_or(&eps);
+                let aik = multi.0.get(&(i.clone(), key.clone())).unwrap_or(&eps);
+                let akj = multi.0.get(&(key.clone(), j.clone())).unwrap_or(&eps);
+                let ans = aij.oplus(&aik.otimes(&akkstar.otimes(akj)));
+                if ans != eps {
+                    newM.insert((i.clone(), j.clone()), ans);
+                }
+            }
 
-
-
-            //    println!("x:{:?},y:{:?},canonized:{:?}", x, y, v.canonise);
-            //}
-            //println!("UNTIL");
-            multi = &multi * self;
-            //println!("WHEN");
-            o = &o + &multi;
+            multi = Matrix(newM);
+            //println!("ITERATION next multi: {}",multi);
         }
-        Ok(o)
+        Ok(&multi + &Matrix(id))
     }
 }
-#[cfg(debug_assertions)]
-impl starable for Matrix<i32, i32, series<i32>>{
+/*#[cfg(debug_assertions)]
+impl starable for Matrix<i32, i32, series<i32>> {
     type Output = Self;
     fn star(&self) -> Result<Self, String> {
+        let mut id = std::collections::HashMap::new();
+        let default = series::from(Poly::from(gd::zero())); // do this once. btw what's up with the casing on these names?
+        for ((x, y), v) in &self.0 {
+            if x == y {
+                // on the diagonal: use v
+                let xy = (x.clone(), y.clone());
+                id.insert(xy, default.clone());
+            } else {
+                // off the diagonal: "project" onto the diagonal and populate with a default value
+                let xx = (x.clone(), x.clone());
+                id.insert(xx, default.clone());
+                let yy = (y.clone(), y.clone());
+                id.insert(yy, default.clone());
+            }
+        }
+        let k: std::collections::HashSet<&i32> =
+            self.0.keys().flat_map(|(x, y)| vec![x, y]).collect();
+        //let scanon=self.map(|s| {let mut a=s.clone();a.canon();a});
+        let mut multi: Matrix<i32, i32, series<i32>> = self.clone();
+        //println!("IT BEGINS!");
+        // let mut o: Matrix<V, V, series<T>> = &Matrix(m) + &multi;
+        let k: Vec<&i32> = k.clone().into_iter().collect();
+        let eps: series<i32> = series::from(Poly::Epsilon());
+        for key in k.clone().into_iter() {
+            let akkstar = multi
+                .0
+                .get(&(key.clone(), key.clone()))
+                .unwrap_or(&eps)
+                .star()?;
+            let mut newM = std::collections::HashMap::new();
+            use itertools::iproduct;
+            for (i, j) in iproduct!(k.clone(), k.clone()) {
+                let aij = multi.0.get(&(i.clone(), j.clone())).unwrap_or(&eps);
+                let aik = multi.0.get(&(i.clone(), key.clone())).unwrap_or(&eps);
+                let akj = multi.0.get(&(key.clone(), j.clone())).unwrap_or(&eps);
+                let ans = aij.oplus(&aik.otimes(&akkstar.otimes(akj)));
+                if ans != eps {
+                    newM.insert((i.clone(), j.clone()), ans);
+                }
+            }
+
+            multi = Matrix(newM);
+            //println!("ITERATION next multi: {}",multi);
+        }
+        Ok(&multi + &Matrix(id))
+    }
+    
+}*/
+
+/*fn star(&self) -> Result<Self, String> {
         let mut m = std::collections::HashMap::new();
         let default = series::from(Poly::from(gd::zero())); // do this once. btw what's up with the casing on these names?
         for ((x, y), v) in &self.0 {
@@ -2188,11 +2418,10 @@ impl starable for Matrix<i32, i32, series<i32>>{
                 println!("[1,3] d=infinity?\nmultiplication of these is fucked up {:?} \n\n next: {} \n new multi {} \n END",old,self,multi);
             }*/
             o = &o + &multi;
-      
+
         }
         Ok(o)
-    }
-}
+    }*/
 /*impl<O,I,T> matrix<O,I,T>{
 fn map<T2>(f:fn(T)->T2)->matrix<O,I,T2>{
 todo!();
@@ -2223,8 +2452,8 @@ impl<T: Copy + Ord + Default> From<Poly<gd<DashNumber<T>>>> for series<T> {
         if item.data.len() == 0 {
             item.data.push(gd::epsilon());
         }
-        assert!(item.data.len()!=0,"this should be prevented?");
-        item.simple=false;
+        assert!(item.data.len() != 0, "this should be prevented?");
+        item.simple = false;
         item.simplify();
         series {
             p: item,
@@ -2283,8 +2512,8 @@ fn main() {
         [6,2]=(g0.d0)
         [7,3]=(g0.d0)
         [7,6]=(g0.d1)*/
- 
- //       let mut k = collections::HashMap::new();
+
+        //       let mut k = collections::HashMap::new();
         /*println!("huh {} end",Matrix(collections::HashMap::from(vec![((1,3),(0,5))
         ,((0,2),(0,3))
         ,((3,6),(1,1))
@@ -2295,7 +2524,7 @@ fn main() {
         ,((1,5),(1,0))
         ,((0,4),(1,0))].iter().map(|(a,b)| (a,series::from(Poly::from(gd::from(b))))).collect())));*/
         //
-       /*let wat=Matrix(vec![
+        /*let wat=Matrix(vec![
             ((1,3),(0,5))
             ,((0,2),(0,3))
             ,((3,6),(1,1))
@@ -2307,65 +2536,33 @@ fn main() {
         ,((1,5),(1,0))
         ,((0,4),(1,0))].into_iter().map(|(a,b)| (a,series::from(Poly::from(gd::from(b))))).collect::<collections::HashMap<(i32,i32),series<i32>>>());
         //println!("time to explore wat:{:?},\nhuh {} end",wat,&wat * &dwat );*/
-    let a: Matrix<i32, i32, series<i32>> = Matrix(vec![
-        ((0,3),(0,2))
-        ,((0,4),(1,0))
-        ,((1,0),(0,3))
-        ,((1,5),(1,0))
-        ,((2,6),(1,0))
-        ,((3,2),(0,1))
-        ,((3,5),(1,0))
-        ,((3,7),(1,0))
-        ,((4,0),(0,0))
-        ,((4,5),(1,10))
-        ,((4,6),(1,0))
-        ,((4,7),(0,2))
-        ,((5,1),(0,0))//Weird behaviour up to here
-      /*  ,((5,4),(0,3))
-        ,((6,1),(0,10))
-        ,((6,2),(0,0))
-        ,((7,3),(0,0))
-        ,((7,6),(0,1))*/
-        ].into_iter().map(|(a,b)| (a,series::from(Poly::from(gd::from(b))))).collect::<collections::HashMap<(i32,i32),series<i32>>>());
-/*let  mut b=Poly::from(gd::from((1,2))).oplus(&Poly::from(gd::from((2,10))));
-b.pop();
-
-println!("{:?}",b);*/
-//println!("{:?}",series::from(Poly::from(gd::from((1,2)))).oplus(&series::from(Poly::from(gd::from((2,10))))));
-        //println!("huh {:?} end ",series::from(Poly::from(gd::from((0,1)))).otimes(&series::from(Poly::from(gd::from((1,0))))));
-        /*k.insert((0, 3), series::from(Poly::from(gd::from((0, 2)))));
-        k.insert((0, 4), series::from(Poly::from(gd::from((1, 0)))));
-        k.insert((1, 0), series::from(Poly::from(gd::from((0, 3)))));
-        k.insert((1, 5), series::from(Poly::from(gd::from((1, 0)))));
-        k.insert((2, 6), series::from(Poly::from(gd::from((1, 0)))));
-        k.insert((3, 2), series::from(Poly::from(gd::from((0, 1)))));
-        k.insert((3, 5), series::from(Poly::from(gd::from((1, 0)))));
-        k.insert((3, 7), series::from(Poly::from(gd::from((1, 0)))));
-        //k.insert((4, 0), series::from(Poly::from(gd::from((0, 0)))));
-        //k.insert((4, 5), series::from(Poly::from(gd::from((1, 10)))));
-        //k.insert((4, 6), series::from(Poly::from(gd::from((1, 0)))));
-        //k.insert((4, 7), series::from(Poly::from(gd::from((0, 2)))));
-        //k.insert((5, 1), series::from(Poly::from(gd::from((0, 0)))));*/
-        //k.insert((5, 4), series::from(Poly::from(gd::from((0, 3)))));
-        //k.insert((6, 1), series::from(Poly::from(gd::from((0, 10)))));
-        //k.insert((6, 2), series::from(Poly::from(gd::from((0, 0)))));
-        //k.insert((7, 3), series::from(Poly::from(gd::from((0, 0)))));
-        //k.insert((7, 6), series::from(Poly::from(gd::from((0, 1)))));
-        //println!("length of p is {}",k.get(&(0,4)).unwrap().p.data.len());
-        
-        
-        //s.p.simplify();
-        //let huh=series::from(Poly::from(gd::zero()));
-        //let hyh=series::from(Poly::from(gd::from((0, 2))));
-        //println!(" printing {:?} now  now",hyh.otimes(&huh));
-        //self.p.otimes(&s2.p)
-        let lmao=&a*&(&a*&(&a*&(&a*&(&a*&(&a*&(&a*&a))))));
-        println!("{}", lmao);
-        //println!("{}", a.star().ok().unwrap());
-        //let mut x = Poly::<gd<DashNumber<i32>>>::Epsilon();
-        //x.simplify();
-        //println!("{}", x.star().ok().unwrap());
-        //println!("{:?}",series::<i32>::from(Poly::Epsilon()));
+        let a: Matrix<i32, i32, series<i32>> = Matrix(
+            vec![
+                ((0, 3), (0, 2)),
+                ((0, 4), (1, 0)),
+                ((1, 0), (0, 3)),
+                ((1, 5), (1, 0)),
+                ((2, 6), (1, 0)),
+                ((3, 2), (0, 1)),
+                ((3, 5), (1, 0)),
+                ((3, 7), (1, 0)),
+                ((4, 0), (0, 0)),
+                ((4, 5), (1, 10)),
+                ((4, 6), (1, 0)),
+                ((4, 7), (0, 2)),
+                ((5, 1), (0, 0)), //Weird behaviour up to here
+                ((5, 4), (0, 3)),
+                ((6, 1), (0, 10)),
+                ((6, 2), (0, 0)),
+                ((7, 3), (0, 0)),
+                ((7, 6), (0, 1)),
+            ]
+            .into_iter()
+            .map(|(a, b)| (a, series::from(Poly::from(gd::from(b)))))
+            .collect::<std::collections::HashMap<(i32, i32), series<i32>>>(),
+        );
+       
+        println!("{}", a.star().ok().unwrap());
     }
 }
 
@@ -2373,19 +2570,102 @@ println!("{:?}",b);*/
 mod tests {
     use crate::*;
     #[test]
+    fn testStarOperatorMatrix() {
+        let a: Matrix<i32, i32, series<i32>> = Matrix(
+            vec![
+                ((4, 5), (1, 10)),
+                ((5, 4), (0, 3)),
+            ]
+            .into_iter()
+            .map(|(a, b)| (a, series::from(Poly::from(gd::from(b)))))
+            .collect::<std::collections::HashMap<(i32, i32), series<i32>>>(),
+        );
+        assert_eq!(Matrix::<i32, i32, series<i32>>(
+            vec![
+                ((4, 4), series{p:Poly::Epsilon(),q:Poly::from(gd::zero()),canonise:true,r:gd::from((1,13))}),
+                ((4, 5), series{p:Poly::Epsilon(),q:Poly::from(gd::from((1,10))),canonise:true,r:gd::from((1,13))}),
+                ((5, 4), series{p:Poly::Epsilon(),q:Poly::from(gd::from((0,3))),canonise:true,r:gd::from((1,13))}),
+                ((5, 5), series{p:Poly::Epsilon(),q:Poly::from(gd::zero()),canonise:true,r:gd::from((1,13))}),
+            ]
+            .into_iter()
+            .collect::<std::collections::HashMap<(i32, i32), series<i32>>>(),
+        ),a.star().ok().unwrap())
+
+
+    }
+    #[test]
+    fn ordforgd() {
+        let z = gd::zero();
+        let d13 = gd::from((1, 13));
+        //println!("{:?}",gd::<DashNumber<i32>>::from((0, 4)) < gd::from((1, 5)));
+        assert!((z > d13), "g0.d0 > g1.d13")
+    }
+    #[test]
+    fn oplus_for_series() {
+        let huh = series::<i32> {
+            p: Poly::Epsilon(),
+            q: Poly::from(gd::from((1, 13))),
+            r: gd::from((1, 13)),
+            canonise: true,
+        };
+        let hah = series::from(Poly::from(gd::from((0, 0))));
+        //println!("{:?}",huh.star());
+        assert_eq!((huh.oplus(&hah)).to_string(), "(g0.d0).[g1.d13]*");
+    }
+    #[test]
+    fn starPolyCheck() {
+        let mut huh = Poly::from(vec![gd::from((0, 0)), gd::from((1, 13))]);
+        huh.simplify();
+
+        //println!("{:?}",huh.star());
+        assert_eq!((huh.star().ok().unwrap()).to_string(), "(g0.d0).[g1.d13]*");
+    }
+    #[test]
+    fn starSeriesCheck() {
+        let huh = series::from(Poly::from(gd::from((1, 13))));
+        assert_eq!((huh.star().ok().unwrap()).to_string(), "(g0.d0).[g1.d13]*");
+    }
+    #[test]
+    fn multiplySeriesCheck() {
+        let s1 = series::<i32> {
+            p: Poly::from(gd::from((1, 15))),
+            q: Poly::from(gd::from((2, 23))),
+            r: gd::zero(),
+            canonise: true,
+        };
+        let s2 = series::<i32> {
+            p: Poly::Epsilon(),
+            q: Poly::from(gd::from((0, 0))),
+            r: gd::from((1, 13)),
+            canonise: true,
+        };
+        assert_eq!((s1.otimes(&s2)).to_string(), "(g1.d15).[g1.d13]*");
+    }
+    #[test]
+    fn seriesOtimesWithStar() {
+        let s = series {
+            canonise: true,
+            p: Poly::Epsilon(),
+            q: Poly::from(gd::zero()),
+            r: gd::from((5, 4)),
+        };
+        assert_eq!((s.otimes(&s)).to_string(), "(g0.d0).[g5.d4]*");
+    }
+    #[test]
     fn addition_and_printing() {
         let s: gd<DashNumber<_>> = (1, 5).into();
         let a = Poly::from(s).oplus(&Poly::from(gd::from((0, 4))));
         assert_eq!(a.to_string(), "g0.d4+g1.d5");
     }
 
-#[test]
-fn test_series(){
-    let a=series::from(Poly::from(gd::from((0,1)))).otimes(&series::from(Poly::from(gd::from((1,0)))));
-    assert_eq!(a.r,gd::zero());
-    assert_eq!(a.p.epsNTop,epsortop::eps);
-    assert_eq!(a.q.data[0],gd::from((1,1)));
-}
+    #[test]
+    fn test_series() {
+        let a = series::from(Poly::from(gd::from((0, 1))))
+            .otimes(&series::from(Poly::from(gd::from((1, 0)))));
+        assert_eq!(a.r, gd::zero());
+        assert_eq!(a.p.epsNTop, epsortop::eps);
+        assert_eq!(a.q.data[0], gd::from((1, 1)));
+    }
     #[test]
     fn test_simplify() {
         let mut p1 = Poly::new(vec![(0, 1).into(), (2, 3).into(), (3, 4).into()]);
