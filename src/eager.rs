@@ -1,4 +1,3 @@
-mod hello;
 #[macro_use]
 extern crate eager;
 

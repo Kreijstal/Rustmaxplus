@@ -20,6 +20,5 @@ Cargo.lock
 *.swn
 *.code-workspace
 .vscode/
-*.vim
-*.rustfmt
+
 # End of .gitignore

@@ -1,0 +1,16 @@
+[package]
+name = "gdmacro"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "gdmacro"
+path = "src/lib.rs"
+proc-macro = true
+
+[dependencies]
+quote = "*"
+syn = { version = "*", features = ["full"] }
+proc-macro2 = "*"
+gd_core = { path = "../gd_core" }

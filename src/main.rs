@@ -1,9 +1,3 @@
-/*
-[dependencies]
-
-macro_rules_attribute = "*"
-*/
-//ndarray = "*"
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
 #![allow(unused_macros)]
@@ -11,71 +5,21 @@ macro_rules_attribute = "*"
 #![allow(unused_variables)]
 #![allow(dead_code)]
 #![feature(const_try)]
-//#![no_std]
+#[macro_use]
+use gd_core::*;
+use gd_core::{get_number, get_number_opt};
 
+
+use core::*;
+use std::vec;
 #[macro_use]
 extern crate macro_rules_attribute;
-
-/* The derive_alias! macro defines a set of traits and their corresponding implementations. These traits can then be used in struct and enum definitions to automatically derive certain traits for those types. In the code above, the derive_alias! macro defines the following aliases:
-
-    #[derive(Eq!)] is equivalent to #[derive(Eq, PartialEq)]
-    #[derive(Ord!)] is equivalent to #[derive(Ord, PartialOrd, Eq!)]]
-    #[derive(Copy!)] is equivalent to #[derive(Copy, Clone)]
-    #[derive(StdDerives!)] is equivalent to #[derive(Debug, Copy!, Default, Ord!, Hash)]
-
-These aliases are then used in the DashNumber enum definition, which specifies that the DashNumber enum should automatically derive the Debug, Copy, Ord, and Eq traits. This means that the DashNumber enum will have the necessary implementations of these traits provided automatically.
-  */
-derive_alias! {
+macro_rules_attribute::derive_alias! {
     #[derive(Eq!)] = #[derive(Eq, PartialEq)];
     #[derive(Ord!)] = #[derive(Ord, PartialOrd, Eq!)];
     #[derive(Copy!)] = #[derive(Copy, Clone)];
-    #[derive(StdDerives!)] = #[derive(Debug, Copy!, Default, Ord!, Hash)];
-}
+}            
 
-macro_rules! my_macro {
-    ($num:expr) => {
-        let x = $num;
-        println!("{}", x)
-    };
-}
-use core::*;
-use std::vec;
-//use ::num::integer::{gcd, lcm};
-//use itertools::Itertools;
-//use std::{fs::canonicalize, default::default
-// collections::{self, HashSet},
-//   ops::Neg,
-// process::Output,};
-//use ndarray;
-#[derive(Debug,Ord!,Copy!)]
-enum DashNumber<N> {
-    NegInfinity,
-    Number(N),
-    Infinity,
-}
-
-//use crate::num;
-// Implement the One trait for the types that we want to
-// be able to multiply by 1.
-/*impl<N: ops::Mul<Output = N> + Copy> ops::Mul for DashNumber<N> {
-    type Output = Self;
-    fn mul(self, other: Self) -> Self::Output {
-        use DashNumber::*;
-        match (self, other) {
-            (NegInfinity, _) => NegInfinity,
-            (_, NegInfinity) => NegInfinity,
-            (Infinity, _) => Infinity,
-            (_, Infinity) => Infinity,
-            (Number(a), Number(b)) => Number(a + b),
-        }
-    }
-}
-impl<N> ::num::One for DashNumber<N> where
-N: ::num::One{
-    fn one() -> Self {
-        DashNumber::Number(N::one())
-    }
-}*/
 impl<T: ::num::Integer + Clone> DashNumber<::num::rational::Ratio<T>> {
     fn round(self) -> DashNumber<T> {
         use DashNumber::*;
@@ -109,25 +53,8 @@ impl<T: fmt::Display> fmt::Display for DashNumber<T> {
         }
     }
 }
-impl<T> DashNumber<T> {}
-impl<T> From<T> for DashNumber<T> {
-    fn from(item: T) -> Self {
-        DashNumber::Number(item)
-    }
-}
-macro_rules! get_number_opt {
-    ($e:expr) => {
-        match $e {
-            DashNumber::Number(a) => Some(a),
-            _ => None,
-        }
-    };
-}
-macro_rules! get_number {
-    ($e:expr) => {
-        get_number_opt!($e).expect("We expected the number to not be an infinity")
-    };
-}
+
+
 fn lol<T: ::num::Integer>(a: T) -> usize
 where
     usize: TryFrom<T>,
@@ -474,29 +401,7 @@ struct gd<T> {
     g: T,
     d: T,
 }
-impl<T: Clone + fmt::Display> fmt::Display for gd<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "g{}.d{}", self.g, self.d)
-    }
-}
-const _: () = {
-    use nom::character::complete::{char, digit1};
-use nom::combinator::map_res;
-use nom::IResult;
 
-fn parse_gd<T>(input: &str) -> IResult<&str, gd<T>>
-where
-    T: std::str::FromStr,
-    <T as std::str::FromStr>::Err: std::fmt::Debug,
-{
-    let (input, _) = char('g')(input)?;
-    let (input, g) = map_res(digit1, |s: &str| s.parse::<T>())(input)?;
-    let (input, _) = char('.')(input)?;
-    let (input, _) = char('d')(input)?;
-    let (input, d) = map_res(digit1, |s: &str| s.parse::<T>())(input)?;
-    Ok((input, gd { g, d }))
-}
-};
 impl<T> PartialOrd for gd<T>
 where
     T: PartialOrd,
@@ -528,22 +433,7 @@ where
         }
     }
 }
-impl<T: Clone> From<(T, T)> for gd<DashNumber<T>> {
-    fn from(item: (T, T)) -> Self {
-        gd {
-            g: item.0.into(),
-            d: item.1.into(),
-        }
-    }
-}
-impl<T: Clone> From<(T, T)> for gd<T> {
-    fn from(item: (T, T)) -> Self {
-        gd {
-            g: item.0,
-            d: item.1,
-        }
-    }
-}
+
 #[derive(Debug,Ord!,Copy!)]
 enum epsortop {
     eps,
@@ -702,8 +592,6 @@ impl<T: Copy + ops::Neg<Output = T> + ops::Add<Output = T>> gd<DashNumber<T>> {
 struct Poly<T: Clone> {
     epsNTop: epsortop,
     data: Vec<T>,
-    // n: u32,
-    //  nblock: u32,
     simple: bool,
 }
 #[derive(Debug,Ord!,Copy!)]
@@ -2536,6 +2424,7 @@ fn main() {
         ,((1,5),(1,0))
         ,((0,4),(1,0))].into_iter().map(|(a,b)| (a,series::from(Poly::from(gd::from(b))))).collect::<collections::HashMap<(i32,i32),series<i32>>>());
         //println!("time to explore wat:{:?},\nhuh {} end",wat,&wat * &dwat );*/
+        ::gdmacro::noideawhatimdoing!(g0.d3+g0.d2);
         let a: Matrix<i32, i32, series<i32>> = Matrix(
             vec![
                 ((0, 3), (0, 2)),
