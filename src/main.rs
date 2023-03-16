@@ -5,10 +5,34 @@
 #![allow(unused_variables)]
 #![allow(dead_code)]
 #![feature(const_try)]
-#[macro_use]
-use gd_core::*;
-use gd_core::{get_number, get_number_opt};
 
+
+#[derive(Debug,Ord!,Copy!)]
+pub enum DashNumber<N> {
+    NegInfinity,
+    Number(N),
+    Infinity,
+}
+impl<T> From<T> for DashNumber<T> {
+    fn from(item: T) -> Self {
+        DashNumber::Number(item)
+    }
+}
+impl<T: Default> Default for DashNumber<T> {
+    fn default() -> Self {
+        DashNumber::Number(T::default())
+    }
+}
+impl<T: fmt::Display> fmt::Display for DashNumber<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        use DashNumber::*;
+        match self {
+            NegInfinity => write!(f, "-∞"),
+            Infinity => write!(f, "∞"),
+            Number(a) => write!(f, "{}", a),
+        }
+    }
+}
 
 use core::*;
 use std::vec;
@@ -38,21 +62,7 @@ impl<T: ::num::Integer + Clone> DashNumber<::num::rational::Ratio<T>> {
         }
     }
 }
-impl<T: Default> Default for DashNumber<T> {
-    fn default() -> Self {
-        DashNumber::Number(T::default())
-    }
-}
-impl<T: fmt::Display> fmt::Display for DashNumber<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use DashNumber::*;
-        match self {
-            NegInfinity => write!(f, "-∞"),
-            Infinity => write!(f, "∞"),
-            Number(a) => write!(f, "{}", a),
-        }
-    }
-}
+
 
 
 fn lol<T: ::num::Integer>(a: T) -> usize
@@ -71,7 +81,7 @@ where
 }*/
 
 #[derive(Debug, PartialEq)]
-enum TryFromDashNumberError {
+pub enum TryFromDashNumberError {
     NegInfinity,
     Number(std::num::TryFromIntError),
     Infinity,
@@ -401,6 +411,43 @@ struct gd<T> {
     g: T,
     d: T,
 }
+#[macro_export]
+macro_rules! get_number_opt {
+    ($e:expr) => {
+        match $e {
+            $crate::DashNumber::Number(a) => Some(a),
+            _ => None,
+        }
+    };
+}
+#[macro_export]
+macro_rules! get_number {
+    ($e:expr) => {
+        $crate::get_number_opt!($e).expect("We expected the number to not be an infinity")
+    };
+}
+
+impl<T: Clone + fmt::Display> fmt::Display for gd<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "g{}.d{}", self.g, self.d)
+    }
+}
+impl<T: Clone> From<(T, T)> for gd<DashNumber<T>> {
+    fn from(item: (T, T)) -> Self {
+        gd {
+            g: item.0.into(),
+            d: item.1.into(),
+        }
+    }
+}
+impl<T: Clone> From<(T, T)> for gd<T> {
+    fn from(item: (T, T)) -> Self {
+        gd {
+            g: item.0,
+            d: item.1,
+        }
+    }
+}
 
 impl<T> PartialOrd for gd<T>
 where
@@ -434,12 +481,7 @@ where
     }
 }
 
-#[derive(Debug,Ord!,Copy!)]
-enum epsortop {
-    eps,
-    NoXtreme,
-    top,
-}
+use gd_core::epsortop;
 impl<T: Clone + Default> gd<DashNumber<T>> {
     fn isDegenerate(&self) -> bool {
         use DashNumber::*;

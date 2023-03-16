@@ -101,22 +101,25 @@ fn parse_dash_number(input: &str) -> IResult<&str, DashNumber<i32>> {
 }
 */
 
+
+#[macro_export]
 macro_rules! get_number_opt {
     ($e:expr) => {
         match $e {
-            DashNumber::Number(a) => Some(a),
+            $crate::DashNumber::Number(a) => Some(a),
             _ => None,
         }
     };
 }
+#[macro_export]
 macro_rules! get_number {
     ($e:expr) => {
-        get_number_opt!($e).expect("We expected the number to not be an infinity")
+        $crate::get_number_opt!($e).expect("We expected the number to not be an infinity")
     };
 }
 
-pub(crate) use get_number; 
-pub(crate) use get_number_opt; 
+//pub(crate) use get_number; 
+//pub(crate) use get_number_opt; 
 #[derive(Debug,Eq!,Copy!)]
 pub struct gd<T> {
     g: T,
