@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_camel_case_types)]
-#![allow(unused_macros)]
-#![allow(unused_imports)]
+//#![allow(unused_macros)]
+//#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
 #![feature(const_try)]
@@ -415,7 +415,7 @@ impl<N: ops::Add<Output = N> + ops::Neg<Output = N> + Clone> ops::Sub<DashNumber
 }
 
 #[derive(Debug,Eq!,Copy!)]
-struct gd<T> {
+pub struct gd<T> {
     g: T,
     d: T,
 }
@@ -490,7 +490,7 @@ where
     }
 }
 
-use gd_core::epsortop;
+use gd_core::Epsortop;
 impl<T: Clone> gd<DashNumber<T>> {
     fn isDegenerate(&self) -> bool {
         use DashNumber::*;
@@ -501,12 +501,12 @@ impl<T: Clone> gd<DashNumber<T>> {
         }
         // self.g == NegInfinity || self.g == Infinity || self.d == NegInfinity || self.d == Infinity
     }
-    fn is_epsilon_or_top(&self) -> epsortop {
-        use epsortop::*;
+    fn is_epsilon_or_top(&self) -> Epsortop {
+        use Epsortop::*;
         use DashNumber::*;
         match (&self.g, &self.d) {
-            (Infinity, Infinity) | (_, NegInfinity) => eps,
-            (NegInfinity, _) => top,
+            (Infinity, Infinity) | (_, NegInfinity) => Eps,
+            (NegInfinity, _) => Top,
             (_, _) => NoXtreme,
         }
     }
@@ -593,7 +593,7 @@ impl<T: Copy + Default + Ord+::num::Zero> starable for gd<DashNumber<T>> {
 }
 impl<T: Copy + Default + ops::Add<Output = T>> gd<DashNumber<T>> {
     fn otimes(&self, other: &Self) -> Self {
-        use DashNumber::*;
+        //use DashNumber::*;
         //product of 2 monomials, degenerate cases are treated
         //as input, 2 monomials by reference
         //the function returns
@@ -642,8 +642,8 @@ impl<T: Copy + ops::Neg<Output = T> + ops::Add<Output = T>> gd<DashNumber<T>> {
 }*/
 
 #[derive(Debug, Clone, PartialEq)]
-struct Poly<T: Clone> {
-    epsNTop: epsortop,
+pub struct Poly<T: Clone> {
+    epsNTop: Epsortop,
     data: Vec<T>,
     simple: bool,
 }
@@ -662,7 +662,7 @@ struct Poly<T: Clone> {
 }*/
 
 #[derive(Debug,Ord!,Copy!)]
-enum Polyinit {
+pub enum Polyinit {
     simplify,
     notsimple,
     onlysimplify,
@@ -671,7 +671,7 @@ enum Polyinit {
 impl<T: Clone> Poly<gd<DashNumber<T>>> {
     fn new(someData: Vec<gd<DashNumber<T>>>) -> Self {
         Poly {
-            epsNTop: epsortop::NoXtreme,
+            epsNTop: Epsortop::NoXtreme,
             data: someData,
             simple: false,
         }
@@ -682,7 +682,7 @@ impl<T: Clone> Default for Poly<gd<DashNumber<T>>> {
     fn default() -> Self {
         use DashNumber::*;
         let mut ans = Self::new(vec![gd::from((Infinity, NegInfinity))]);
-        ans.epsNTop = epsortop::eps;
+        ans.epsNTop = Epsortop::Eps;
         ans.simple = true;
         ans
     }
@@ -691,8 +691,8 @@ impl<T: Clone> Default for Poly<gd<DashNumber<T>>> {
 impl<T: Copy + fmt::Display> fmt::Display for Poly<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self.epsNTop {
-            epsortop::eps => write!(f, "eps"),
-            epsortop::top => write!(f, "T"),
+            Epsortop::Eps => write!(f, "eps"),
+            Epsortop::Top => write!(f, "T"),
             _ => write!(
                 f,
                 "{}",
@@ -708,12 +708,12 @@ impl<T: Copy + fmt::Display> fmt::Display for Poly<T> {
 impl<T: Copy + PartialEq + Default> From<gd<DashNumber<T>>> for Poly<gd<DashNumber<T>>> {
     fn from(item: gd<DashNumber<T>>) -> Self {
         let a = item.is_epsilon_or_top();
-        use epsortop::*;
+        use Epsortop::*;
         Poly {
             epsNTop: a,
             data: vec![match a {
-                eps => gd::epsilon(),
-                top => gd::top(),
+                Eps => gd::epsilon(),
+                Top => gd::top(),
                 _ => item,
             }],
             simple: true,
@@ -723,7 +723,7 @@ impl<T: Copy + PartialEq + Default> From<gd<DashNumber<T>>> for Poly<gd<DashNumb
 impl<T: Copy + PartialEq + Default> From<Vec<gd<DashNumber<T>>>> for Poly<gd<DashNumber<T>>> {
     fn from(item: Vec<gd<DashNumber<T>>>) -> Self {
         //let a = item.is_epsilon_or_top();
-        use epsortop::*;
+        use Epsortop::*;
         //let mut p
         Poly {
             epsNTop: NoXtreme,
@@ -818,7 +818,7 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
             self.data.remove(j);
             self.simple = false;
             if self.data.len() < 1 {
-                self.epsNTop = epsortop::eps;
+                self.epsNTop = Epsortop::Eps;
                 self.simple = true;
                 self.data = vec![gdmacro::g_d!{eps}]
             }
@@ -908,9 +908,9 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
             self.data.drain(n..);
         }
         self.simple = true;
-        self.epsNTop = epsortop::NoXtreme;
+        self.epsNTop = Epsortop::NoXtreme;
         if self.data.len() == 1 && self.data[0] == gd::epsilon() {
-            self.epsNTop = epsortop::eps;
+            self.epsNTop = Epsortop::Eps;
         }
         //      println!("end of simiplify");
     }
@@ -922,9 +922,9 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
             "both Polynomes should be simplified"
         );
         match self.epsNTop {
-            epsortop::top => Self::Top(),
-            epsortop::eps => rhs.clone(),
-            epsortop::NoXtreme => {
+            Epsortop::Top => Self::Top(),
+            Epsortop::Eps => rhs.clone(),
+            Epsortop::NoXtreme => {
                 let n = self.data.len() + rhs.data.len();
                 let mut temp: Vec<gd<DashNumber<T>>> =
                     iter::repeat(Default::default()).take(n).collect();
@@ -1096,7 +1096,7 @@ where
                     j += T::one();
                 }
             }
-            use ::num::Zero;
+           // use ::num::Zero;
             
             return Ok(gdmacro::series!{{p}+(g0.dINF).[g0.dINF]*,T}.simp());
         }
@@ -1168,7 +1168,7 @@ where
     }
 }
 #[derive(Clone, PartialEq, Debug)]
-struct Series<T: Clone> {
+pub struct Series<T: Clone> {
     p: Poly<gd<DashNumber<T>>>,
     q: Poly<gd<DashNumber<T>>>,
     r: gd<DashNumber<T>>,
@@ -1220,7 +1220,7 @@ impl<T: Copy + fmt::Display + cmp::PartialEq + ::num::Zero> fmt::Display for Ser
         write!(
             f,
             "{}({}){}",
-            if self.p.epsNTop != epsortop::eps {
+            if self.p.epsNTop != Epsortop::Eps {
                 format!("{}+", self.p)
             } else {
                 "".to_owned()
@@ -1293,10 +1293,10 @@ where
 
 impl<T: Clone> Series<T> {
     fn isTop(&self) -> bool {
-        self.q.epsNTop == epsortop::top
+        self.q.epsNTop == Epsortop::Top
     }
     fn isEpsilon(&self) -> bool {
-        self.p.epsNTop == epsortop::eps && self.q.epsNTop == epsortop::eps
+        self.p.epsNTop == Epsortop::Eps && self.q.epsNTop == Epsortop::Eps
     }
 }
 
@@ -1591,9 +1591,8 @@ where
             return result;
         }
         let mut i: T;
-        if !<DashNumber<T> as ::num::Zero>::is_zero(&self.r.d)
+        if self.r!=gdmacro::g_d!(g0.d0,T)
             && !<DashNumber<T> as ::num::Zero>::is_zero(&s2.r.d)
-            && !<DashNumber<T> as ::num::Zero>::is_zero(&self.r.g)
             && <DashNumber<T> as ::num::Zero>::is_zero(&s2.r.g)
         {
             // p = p2 + q2 * (0, Infinity) + p1 + q1 * (r1) *
@@ -2022,7 +2021,7 @@ where
     }
 }
 #[derive(Debug, Clone)]
-struct Matrix<O, I, T>(std::collections::HashMap<(O, I), T>);
+pub struct Matrix<O, I, T>(std::collections::HashMap<(O, I), T>);
 
 impl<O, I, T> cmp::PartialEq for Matrix<O, I, T>
 where
@@ -2047,7 +2046,7 @@ where
     }
 }
 
-#[cfg(not(debug_assertions))]
+//#[cfg(not(debug_assertions))]
 impl<A, B, T> fmt::Display for Matrix<A, B, T>
 where
     T: fmt::Display + fmt::Debug,
@@ -2055,12 +2054,6 @@ where
     B: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        /*    self.data
-                            .iter()
-                            .map(|x| x.to_string())
-                            .collect::<Vec<_>>()
-                            .join("+")
-        */
         write!(
             f,
             "{}",
@@ -2073,7 +2066,7 @@ where
     }
 }
 
-#[cfg(debug_assertions)]
+/*#[cfg(debug_assertions)]
 impl fmt::Display for Matrix<i32, i32, Series<i32>> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
@@ -2086,8 +2079,8 @@ impl fmt::Display for Matrix<i32, i32, Series<i32>> {
                 .join("\n")
         )
     }
-}
-fn inner<O, Intermediate, I, T>(
+} */
+pub fn inner<O, Intermediate, I, T>(
     a: &Matrix<O, Intermediate, T>,
     b: &Matrix<Intermediate, I, T>,
     f: fn(T, T) -> T,
@@ -2326,7 +2319,7 @@ impl<T: Copy + Ord + ::num::Zero+Default> From<Poly<gd<DashNumber<T>>>> for Seri
             item.data.len() > 0,
             "Can't convert Poly to Series, if Poly is zero-sized"
         );
-        use epsortop::*;
+        //use Epsortop::*;
         let q = item.pop();
         if item.data.len() == 0 {
             item.data.push(gd::epsilon());
@@ -2364,6 +2357,33 @@ fn division<T: ::num::Zero + Copy + PartialEq + ::num::Integer>(
     }
     //todo!();
 }
+
+struct SortedMatrix<O, I, T>(Matrix<O, I, T>);
+
+impl<A, B, T> fmt::Display for SortedMatrix<A, B, T>
+where
+    T: fmt::Display + fmt::Debug,
+    A: fmt::Display + Ord+Clone+hash::Hash,
+    B: fmt::Display + Ord+Clone+hash::Hash,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut sorted_keys: Vec<_> = self.0 .0.keys().cloned().collect();
+        sorted_keys.sort();
+
+        write!(
+            f,
+            "{}",
+            sorted_keys
+                .iter()
+                .filter_map(|k| self.0 .0.get(k).map(|v| (k, v)))
+                .map(|((x, y), v)| format!("[{},{}]={}", x, y, v))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
+    }
+}
+
+/*
 fn main() {
     {
         // my_macro!(3);
@@ -2375,19 +2395,30 @@ fn main() {
         let test2: DashNumber<i32> = 10.into();
         //  println!("{}",gdmacro::series!(g1.d3+g2.d3+(g5.d3).[g3.d4]*,i32));
         //::gdmacro::dn!(g0.d3+g0.d2);
-        /*let a: Matrix<i32, i32, Series<i32>> = Matrix(
+
+        /* [0,3]=(g0.d2)
+[1,0]=(g0.d3)
+[1,5]=(g1.d0)
+[2,5]=(g1.d10)
+[2,6]=(g1.d0)
+[3,2]=(g0.d1)
+[4,0]=(g0.d0)
+[4,7]=(g0.d2)
+[5,1]=(g0.d0)
+[5,4]=(g0.d3)
+[6,1]=(g0.d10)
+[6,2]=(g0.d0)
+[7,3]=(g0.d0)
+[7,6]=(g0.d1)*/
+        let a: Matrix<i32, i32, Series<i32>> = Matrix(
             vec![
                 ((0, 3), (0, 2)),
-                ((0, 4), (1, 0)),
                 ((1, 0), (0, 3)),
                 ((1, 5), (1, 0)),
+                ((2,5),(1,10)),
                 ((2, 6), (1, 0)),
                 ((3, 2), (0, 1)),
-                ((3, 5), (1, 0)),
-                ((3, 7), (1, 0)),
                 ((4, 0), (0, 0)),
-                ((4, 5), (1, 10)),
-                ((4, 6), (1, 0)),
                 ((4, 7), (0, 2)),
                 ((5, 1), (0, 0)), //Weird behaviour up to here
                 ((5, 4), (0, 3)),
@@ -2401,10 +2432,10 @@ fn main() {
             .collect::<std::collections::HashMap<(i32, i32), Series<i32>>>(),
         );
 
-        println!("{}", a.star().ok().unwrap());*/
+        println!("{}", SortedMatrix(a.star().ok().unwrap()));
     }
 }
-
+*/
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -2532,7 +2563,7 @@ mod tests {
         let a = Series::from(Poly::from(gd::from((0, 1))))
             .otimes(&Series::from(Poly::from(gd::from((1, 0)))));
         assert_eq!(a.r, gd::zero());
-        assert_eq!(a.p.epsNTop, epsortop::eps);
+        assert_eq!(a.p.epsNTop, Epsortop::Eps);
         assert_eq!(a.q.data[0], gd::from((1, 1)));
     }
     #[test]

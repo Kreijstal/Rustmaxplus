@@ -1,25 +1,24 @@
 use gd_core::{
-    gdPlaceholder, DashNumberString, GdString, PolyPlaceholder, PolyString, SeriesPlaceholder,
-    SeriesString,
+    GdPlaceholder, DashNumberString, PolyPlaceholder, SeriesPlaceholder,
 };
 use proc_macro::TokenStream;
 use proc_macro2::{Delimiter, Group, TokenTree};
 use quote::{quote, ToTokens};
 use std::collections::VecDeque;
-use syn::{parse_macro_input, ItemFn, Type};
+use syn::{Type};
 fn parse_arguments(
     input: proc_macro2::TokenStream,
 ) -> Result<(String, Option<Type>, VecDeque<proc_macro2::TokenStream>), String> {
     let mut iter = input.into_iter();
     let mut first_arg = String::new();
     let mut second_arg: Option<Type> = None;
-    let mut placeHolders = VecDeque::new();
+    let mut place_holders = VecDeque::new();
     while let Some(token) = iter.next() {
         match token {
             TokenTree::Group(group) => {
                 let (group_str, group_placeholders) = handle_group(group)?;
                 first_arg.push_str(&group_str);
-                placeHolders.extend(group_placeholders);
+                place_holders.extend(group_placeholders);
             }
             TokenTree::Punct(punct) => {
                 if punct.as_char() == ',' {
@@ -40,7 +39,7 @@ fn parse_arguments(
         }
     }
 
-    Ok((first_arg, second_arg, placeHolders))
+    Ok((first_arg, second_arg, place_holders))
 }
 fn handle_group(
     group: Group,
@@ -59,19 +58,19 @@ fn handle_group(
         Delimiter::None => ' ',
     };
     if group.delimiter() == Delimiter::Brace {
-        let mut placeHolders = VecDeque::new();
-        placeHolders.push_back(group.to_token_stream());
-        Ok(("#".to_string(), placeHolders))
+        let mut place_holders = VecDeque::new();
+        place_holders.push_back(group.to_token_stream());
+        Ok(("#".to_string(), place_holders))
     } else {
         let mut content = String::new();
-        let mut placeHolders = VecDeque::new();
+        let mut place_holders = VecDeque::new();
         content.push(delimiter_start);
         for token in group.stream() {
             match token {
                 TokenTree::Group(inner_group) => {
                     let (inner_group_str, inner_placeholders) = handle_group(inner_group)?;
                     content.push_str(&inner_group_str);
-                    placeHolders.extend(inner_placeholders);
+                    place_holders.extend(inner_placeholders);
                 }
                 TokenTree::Punct(punct) => {
                     content.push(punct.as_char());
@@ -85,7 +84,7 @@ fn handle_group(
             }
         }
         content.push(delimiter_end);
-        Ok((content, placeHolders))
+        Ok((content, place_holders))
     }
 }
 fn dn2(
@@ -95,7 +94,7 @@ fn dn2(
         &mut VecDeque<proc_macro2::TokenStream>,
     ),
 ) -> proc_macro2::TokenStream {
-    let (b, c, mut e) = a;
+    let (b, c,  e) = a;
     let mut start = quote! {DashNumber};
     match c.clone() {
         Some(typ) => {
@@ -162,7 +161,7 @@ fn poly_string2(
 
     let gd_strings = quote! {#(#gd_strings),*};
     quote! {
-        Poly{epsNTop: epsortop::NoXtreme,data:vec![#gd_strings],simple:false}
+        Poly{epsNTop: Epsortop::NoXtreme,data:vec![#gd_strings],simple:false}
     }},
 PolyPlaceholder::Placeholder=>vec.pop_front().expect("This is probably a bug with the macro library, a placeholder was expected, but none found.")
 
@@ -197,14 +196,14 @@ fn series_string2(
 
 fn gd_string2(
     a: (
-        gdPlaceholder,
+        GdPlaceholder,
         Option<Type>,
         &mut VecDeque<proc_macro2::TokenStream>,
     ),
 ) -> proc_macro2::TokenStream {
     let (gd_string, typ, vec) = a;
     match gd_string{
-    gdPlaceholder::gdString(gd_string)=>{let g_token_stream = dn2((gd_string.g.clone(), typ.clone(),vec));
+    GdPlaceholder::GdString(gd_string)=>{let g_token_stream = dn2((gd_string.g.clone(), typ.clone(),vec));
     let d_token_stream = dn2((gd_string.d.clone(), typ,vec));
 
     quote! {
@@ -213,7 +212,7 @@ fn gd_string2(
             d: #d_token_stream,
         }
     }},
-     gdPlaceholder::Placeholder=>vec.pop_front().expect("This is probably a bug with the macro library, a placeholder was expected, but none found.")
+     GdPlaceholder::Placeholder=>vec.pop_front().expect("This is probably a bug with the macro library, a placeholder was expected, but none found.")
 
 }
 }
@@ -270,10 +269,10 @@ mod tests {
             "{:?}",
             {let (a,_,b)=parse_arguments(quote! {g{1+2}.d3+g2.d3+(g5.d3).[g3.d4]*,i32}).ok().unwrap();(a.to_string(),b)}
         );*/
-        println!(
-            "{:?}",
+        assert_eq!(
+            "Series { p : Poly { epsNTop : epsortop :: NoXtreme , data : vec ! [gd { g : DashNumber :: < T > :: Infinity , d : DashNumber :: < T > :: NegInfinity , }] , simple : false } , q : Poly { epsNTop : epsortop :: NoXtreme , data : vec ! [gd { g : DashNumber :: < T > :: Number (< T as :: num :: One > :: One ()) , d : DashNumber :: < T > :: Infinity , }] , simple : false } , r : gd { g : DashNumber :: < T > :: Number (< T as :: num :: Zero > :: zero ()) , d : DashNumber :: < T > :: Infinity , } , canonise : false }",
             series_parse(quote! {(g1.dINF).[g0.dINF]*,T}).ok().unwrap().to_string()
         );
-        assert!(false);
+       // assert!(false);
     }
 }
