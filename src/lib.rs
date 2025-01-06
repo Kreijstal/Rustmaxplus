@@ -4,7 +4,20 @@
 //#![allow(unused_imports)]
 #![allow(unused_variables)]
 #![allow(dead_code)]
-#![feature(const_try)]
+//#![feature(const_try)]
+
+use core::*;
+use std::vec;
+
+
+#[macro_use]
+extern crate macro_rules_attribute;
+macro_rules_attribute::derive_alias! {
+    #[derive(Eq!)] = #[derive(Eq, PartialEq)];
+    #[derive(Ord!)] = #[derive(Ord, PartialOrd, Eq!)];
+    #[derive(Copy!)] = #[derive(Copy, Clone)];
+}
+
 
 #[derive(Debug,Ord!,Copy!)]
 pub enum DashNumber<N> {
@@ -21,7 +34,9 @@ pub enum DashNumber<N> {
         }
     }
 }*/
-
+pub use gd_core;
+pub use gdmacro;
+pub extern crate num;
 
 impl<T> From<T> for DashNumber<T> {
     fn from(item: T) -> Self {
@@ -44,15 +59,7 @@ impl<T: fmt::Display> fmt::Display for DashNumber<T> {
     }
 }
 
-use core::*;
-use std::vec;
-#[macro_use]
-extern crate macro_rules_attribute;
-macro_rules_attribute::derive_alias! {
-    #[derive(Eq!)] = #[derive(Eq, PartialEq)];
-    #[derive(Ord!)] = #[derive(Ord, PartialOrd, Eq!)];
-    #[derive(Copy!)] = #[derive(Copy, Clone)];
-}
+
 
 impl<T: ::num::Integer + Clone> DashNumber<::num::rational::Ratio<T>> {
     fn round(self) -> DashNumber<T> {
@@ -184,6 +191,7 @@ impl<N: ::num::Zero + Copy + ::num::Integer + PartialOrd> ops::Div for DashNumbe
     fn div(self, rhs: DashNumber<N>) -> Self::Output {
         use DashNumber::*;
         //use ::num::Zero;
+        #[allow(unused_imports)] //This is a bug with rust Warning system
         use core::panic;
         match (self, rhs) {
             (_, Number(a)) if a.is_zero() => panic!("no division by zero"),
@@ -416,8 +424,8 @@ impl<N: ops::Add<Output = N> + ops::Neg<Output = N> + Clone> ops::Sub<DashNumber
 
 #[derive(Debug,Eq!,Copy!)]
 pub struct gd<T> {
-    g: T,
-    d: T,
+   pub g: T,
+   pub d: T,
 }
 
 #[macro_export]
@@ -490,7 +498,7 @@ where
     }
 }
 
-use gd_core::Epsortop;
+pub use gd_core::Epsortop;
 impl<T: Clone> gd<DashNumber<T>> {
     fn isDegenerate(&self) -> bool {
         use DashNumber::*;
@@ -547,7 +555,7 @@ impl<
     > usefulNum for T
 {
 }
-trait starable {
+pub trait starable {
     type Output;
     fn star(&self) -> Result<Self::Output, String>;
 }
@@ -643,9 +651,9 @@ impl<T: Copy + ops::Neg<Output = T> + ops::Add<Output = T>> gd<DashNumber<T>> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Poly<T: Clone> {
-    epsNTop: Epsortop,
-    data: Vec<T>,
-    simple: bool,
+    pub epsNTop: Epsortop,
+    pub data: Vec<T>,
+    pub simple: bool,
 }
 /*impl<T: Clone> From<::gd_core::Poly<::gd_core::gd<gd_core::DashNumber<T>>>> for Poly<gd<DashNumber<T>>> {
     fn from(gd_core_poly: ::gd_core::Poly<::gd_core::gd<gd_core::DashNumber<T>>>) -> Self {
@@ -754,7 +762,7 @@ impl<T: Copy + Ord + Default + ops::Add<Output = T>+::num::Zero> Poly<gd<DashNum
 }
 impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
     //get causal part of Polynom
-    fn prcaus(&self) -> Self {
+    pub fn prcaus(&self) -> Self {
         assert!(
             self.simple,
             "prcaus shouldn't be called on unsimplified form"
@@ -795,13 +803,13 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
         self.data.sort_unstable_by(|a, b| b.cmp(a));
         self.onlysimply();
     }
-    fn Top() -> Self {
+    pub fn Top() -> Self {
         gd::top().into()
     }
-    fn Epsilon() -> Self {
+    pub fn Epsilon() -> Self {
         gd::epsilon().into()
     }
-    fn E() -> Self {
+    pub fn E() -> Self {
         gd::zero().into()
     }
     //fn pop(&mut self)
@@ -838,7 +846,7 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
         self.data = monom;
         self.simple = propre;
     }
-    fn init(monom: Vec<gd<DashNumber<T>>>, can: Polyinit) -> Self {
+    pub fn init(monom: Vec<gd<DashNumber<T>>>, can: Polyinit) -> Self {
         let mut something = Self::new(vec![]);
         something.assign(monom, false);
         use Polyinit::*;
@@ -850,7 +858,7 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
         };
         something
     }
-    fn simp(mut self)->Self{
+    pub fn simp(mut self)->Self{
         self.simplify();
         self
     }
@@ -915,7 +923,7 @@ impl<T: Copy + Ord + Default+::num::Zero> Poly<gd<DashNumber<T>>> {
         //      println!("end of simiplify");
     }
 
-    fn oplus(&self, rhs: &Self) -> Self {
+    pub fn oplus(&self, rhs: &Self) -> Self {
         //assume simplified
         assert!(
             self.simple && rhs.simple,
@@ -1169,10 +1177,10 @@ where
 }
 #[derive(Clone, PartialEq, Debug)]
 pub struct Series<T: Clone> {
-    p: Poly<gd<DashNumber<T>>>,
-    q: Poly<gd<DashNumber<T>>>,
-    r: gd<DashNumber<T>>,
-    canonise: bool,
+    pub p: Poly<gd<DashNumber<T>>>,
+    pub q: Poly<gd<DashNumber<T>>>,
+    pub r: gd<DashNumber<T>>,
+    pub canonise: bool,
 }
 /*impl<T: usefulNum+Copy+ops::Neg<Output=T>> From<::gd_core::series<T>> for series<T> where
 usize: TryFrom<T> + TryFrom<DashNumber<T>, Error = TryFromDashNumberError>{
@@ -1246,7 +1254,7 @@ where
         + TryFrom<usize>,
     usize: TryFrom<T> + TryFrom<DashNumber<T>, Error = TryFromDashNumberError>, // + ops::Add<Output = T>,
 {
-    type Output = Self;
+    type Output = Series<T>;
     fn star(&self) -> Result<Self, String> {
         if !self.canonise {
             return Err(
@@ -1312,7 +1320,16 @@ where
         + ::num::Zero
         + PartialOrd, //  <usize as TryFrom<DashNumber<T>>>::Error: TryFromDashNumberError
 {
-    fn otimes(&self, s2: &Self) -> Self {
+   pub fn top()->Self{
+        Self::from(Poly::Top())
+    }
+   pub fn epsilon()->Self{
+        Self::from(Poly::Epsilon())
+    }
+   pub fn e()->Self{
+        Self::from(Poly::E())
+    }
+   pub fn otimes(&self, s2: &Self) -> Self {
         ////println!("series otimes");
         use DashNumber::*;
         assert!(
@@ -1498,7 +1515,7 @@ where
         result.canon();
         result
     }
-    fn oplus(&self, s2: &Self) -> Self {
+   pub fn oplus(&self, s2: &Self) -> Self {
         use DashNumber::*;
         //println!("series oplus self is canonise {:?} {:?}",self.canonise,s2.canonise);
         assert!(
@@ -1732,7 +1749,7 @@ where
         result.canon();
         result
     }
-    fn simp(mut self)->Self{
+   pub fn simp(mut self)->Self{
         self.canon();
         self
     }
@@ -2021,7 +2038,7 @@ where
     }
 }
 #[derive(Debug, Clone)]
-pub struct Matrix<O, I, T>(std::collections::HashMap<(O, I), T>);
+pub struct Matrix<O, I, T>(pub std::collections::HashMap<(O, I), T>);
 
 impl<O, I, T> cmp::PartialEq for Matrix<O, I, T>
 where
@@ -2358,7 +2375,7 @@ fn division<T: ::num::Zero + Copy + PartialEq + ::num::Integer>(
     //todo!();
 }
 
-struct SortedMatrix<O, I, T>(Matrix<O, I, T>);
+pub struct SortedMatrix<O, I, T>(pub Matrix<O, I, T>);
 
 impl<A, B, T> fmt::Display for SortedMatrix<A, B, T>
 where
@@ -2375,7 +2392,7 @@ where
             "{}",
             sorted_keys
                 .iter()
-                .filter_map(|k| self.0 .0.get(k).map(|v| (k, v)))
+                .filter_map(|k| self.0 .0.get(k).map(|v| (k, v)))       
                 .map(|((x, y), v)| format!("[{},{}]={}", x, y, v))
                 .collect::<Vec<_>>()
                 .join("\n")

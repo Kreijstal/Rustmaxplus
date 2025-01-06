@@ -125,7 +125,7 @@ fn dn2(
         DashNumberString::One => match c {
             Some(typ) => {
                 let asdf: proc_macro2::TokenStream =
-                    quote! {::Number(<#typ as ::num::One>::One())};
+                    quote! {::Number(<#typ as ::num::One>::one())};
                 asdf
             }
             None => {
