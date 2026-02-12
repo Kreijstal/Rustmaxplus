@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 macro_rules_attribute = "*"
-nom = "7.1.3"
+nom = "8.0.0"
 num = "0.4.0"
